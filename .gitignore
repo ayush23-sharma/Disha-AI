@@ -1,0 +1,37 @@
+﻿*.iml
+.gradle
+
+# Local machine properties — contains SDK path and all API keys; never commit
+# Copy local.properties.example → local.properties and fill in your values
+/local.properties
+
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# Internal planning docs (not part of the public project)
+hide-api-keys-new-repo-plan.md
+
+# Personal developer scratch notes (not part of the project)
+Disha_AI_resources
+
+# Local IDE and coding-agent files
+.idea/
+.bob/
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local ngrok executable; install separately
+ngrok.exe

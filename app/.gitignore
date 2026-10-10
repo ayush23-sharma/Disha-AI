@@ -1,0 +1,10 @@
+﻿/build
+
+# Firebase config — contains real API keys and OAuth client IDs
+# Copy app/google-services.json.example → app/google-services.json and fill in your values
+google-services.json
+
+# Google Maps API keys — variant-specific, contain real keys
+# Copy the corresponding .example file and fill in your Maps API key
+/src/debug/res/values/google_maps_api.xml
+/src/release/res/values/google_maps_api.xml

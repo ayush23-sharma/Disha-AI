@@ -1,0 +1,32 @@
+<resources>
+    <!--
+    SETUP — Release build Google Maps API key
+    ==========================================
+    This file is a template. Copy it to:
+        app/src/release/res/values/google_maps_api.xml
+    and replace the placeholder with your real key.
+
+    ⚠️  DUAL-USE KEY WARNING
+    This key is used for TWO different purposes in this app:
+      1. Android Maps SDK  — map tile rendering (AndroidManifest meta-data)
+      2. Directions web API — HTTP call to maps.googleapis.com/maps/api/directions/json
+
+    If you restrict this key to "Android apps" only in Google Cloud Console, the
+    Directions web-service call will fail with REQUEST_DENIED. You have two options:
+
+    Option A (simpler): Leave the key unrestricted.
+    Option B (recommended for production): Create two separate keys —
+      • Key 1: restricted to Android app (package + SHA-1 of release keystore) for Maps SDK
+      • Key 2: unrestricted or IP-restricted for the Directions web-service call
+      Then pass Key 2 separately (e.g. via BuildConfig) and update MapsViewModel.
+
+    HOW TO GET A KEY FOR RELEASE
+    -----------------------------
+    1. Go to https://console.cloud.google.com → APIs & Services → Credentials
+    2. Create or reuse an API key with "Maps SDK for Android" and "Directions API" enabled
+    3. Get your release keystore SHA-1:
+         keytool -list -v -keystore your-release-key.jks -alias your-alias
+    4. Replace the placeholder below with your key (it starts with "AIza")
+    -->
+    <string name="google_maps_key" templateMergeStrategy="preserve" translatable="false">YOUR_RELEASE_GOOGLE_MAPS_API_KEY</string>
+</resources>
