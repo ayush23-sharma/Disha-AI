@@ -1,6 +1,8 @@
-# Disha AI — Women Safety App
+# Disha AI — Women's Safety Navigation Prototype
 
-An Android application that helps women stay safe through real-time safe-route navigation, an emergency SOS system, and an AI-powered danger-zone overlay backed by a Python/FastAPI service.
+Disha AI is an Android prototype exploring safety-aware route comparison alongside emergency-contact features. It combines a Kotlin/Jetpack Compose app with a Python/FastAPI backend that applies DBSCAN clustering to **synthetic geographical coordinates for Faridabad**.
+
+> **Prototype limitation:** the current data is synthetic, not verified crime or safety data. The app demonstrates a technical workflow; it does not establish that a location is dangerous or that a route is objectively safe. Do not rely on it for real-world safety decisions.
 
 ---
 
@@ -8,41 +10,47 @@ An Android application that helps women stay safe through real-time safe-route n
 
 | Feature | Description |
 |---|---|
-| **Firebase Authentication** | Sign-in with Email/Password or Google account via FirebaseUI |
-| **Emergency SOS** | One-tap (or shake-to-trigger) button that sends your live GPS location via SMS and email to all registered guardians and auto-dials the first guardian |
-| **Guardian Management** | Add, view, and delete trusted contacts stored locally with Room |
-| **Safe Navigation** | Google Maps view with danger-zone overlay and Directions API route scoring — routes are ranked by proximity to danger zones and safe havens |
-| **Danger Zone Overlay** | Fetched from the FastAPI backend, which uses DBSCAN clustering on synthetic crime-coordinate data for the Faridabad region |
+| **Firebase Authentication** | Sign in using Email/Password or Google through FirebaseUI Auth. |
+| **Emergency SOS** | Use the Emergency button or shake the phone three times within the configured detection window. The app uses the last location it retrieved, sends SMS messages to saved guardians, opens an email app with a prefilled message, and attempts to call the first guardian when the required permission is granted. Email is not silently sent in the background. |
+| **Guardian Management** | Add, view, and delete trusted contacts stored locally using Room. |
+| **Route Comparison Prototype** | Displays Google Maps and evaluates alternative routes returned by the Directions API using configured route-scoring rules. |
+| **Danger-Zone Overlay** | Fetches centroids from the FastAPI backend. DBSCAN groups dense regions in synthetic coordinate data; those groups are displayed on the map. |
+
+The current route-scoring rules apply a penalty when a route passes within approximately 500 metres of a flagged danger-zone centroid and a bonus when it passes near a hardcoded safe-haven point. These are configured heuristics, not a trained route-safety prediction model.
 
 ---
 
 ## Tech Stack
 
-**Android app**
-- Kotlin · Jetpack Compose · Navigation Compose
-- Firebase Authentication · FirebaseUI Auth
-- Google Maps SDK for Android · Directions API (web service)
-- Fused Location Provider
-- Room (local guardian storage)
-- Retrofit 2 · OkHttp (backend communication)
-- MVVM (ViewModel · LiveData · Coroutines)
+### Android app
 
-**Backend**
-- Python 3 · FastAPI · Uvicorn
-- scikit-learn (DBSCAN) · NumPy
-- Exposed via ngrok during development
+- Kotlin, Jetpack Compose, Navigation Compose
+- Firebase Authentication and FirebaseUI Auth
+- Google Maps SDK for Android
+- Google Directions API (currently called directly by the Android app)
+- Fused Location Provider
+- Room for local guardian storage
+- Retrofit 2 and OkHttp for backend communication
+- ViewModel, LiveData and Kotlin Coroutines
+
+### Backend
+
+- Python 3.10+
+- FastAPI and Uvicorn
+- scikit-learn (DBSCAN) and NumPy
+- ngrok for temporary development access from the Android device
 
 ---
 
 ## Prerequisites
 
-- Android Studio Hedgehog or later
-- Android SDK 34 (compileSdkVersion)
-- Min Android API 24 (Android 7.0)
-- Python 3.9+
-- [ngrok](https://ngrok.com/) account and CLI (free tier is fine)
-- A Firebase project with Authentication enabled
-- A Google Cloud project with **Maps SDK for Android** and **Directions API** enabled
+- Android Studio with Android SDK 34 installed
+- JDK 17 (used by the Gradle build)
+- Android device or emulator running API 24 (Android 7.0) or later
+- Python 3.10 or later
+- An ngrok account and CLI for testing the Android app against the locally running backend
+- A Firebase project with Email/Password and Google sign-in enabled
+- A Google Cloud project with Maps SDK for Android and Directions API enabled
 
 ---
 
@@ -51,175 +59,262 @@ An Android application that helps women stay safe through real-time safe-route n
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/Disha-AI.git
+git clone https://github.com/ayush23-sharma/Disha-AI.git
 cd Disha-AI
 ```
 
 ### 2. Configure `local.properties`
 
-Copy the example file and fill in your values:
+Copy the example file. On Windows PowerShell:
+
+```powershell
+Copy-Item .\local.properties.example .\local.properties
+```
+
+On macOS/Linux:
 
 ```bash
 cp local.properties.example local.properties
 ```
 
-Then edit `local.properties`:
+Open `local.properties` and set your local Android SDK path and your own backend URL. For example:
 
 ```properties
-sdk.dir=/path/to/your/Android/Sdk          # your local Android SDK path
-MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY      # see Step 4
-BACKEND_BASE_URL=YOUR_BACKEND_BASE_URL     # see Step 5 — include trailing slash
+# Use the SDK path on your machine. Android Studio may populate sdk.dir automatically.
+sdk.dir=C:\\Users\\YOUR_USERNAME\\AppData\\Local\\Android\\Sdk
+
+# Set this after starting your backend and ngrok; keep the trailing slash.
+BACKEND_BASE_URL=https://YOUR-NGROK-DOMAIN.ngrok-free.app/
 ```
 
-> `local.properties` is gitignored and never committed.
+Use the actual SDK path for your machine. On macOS, a common SDK location is `~/Library/Android/sdk`; Linux installations vary.
 
----
+`local.properties` is ignored by Git. The Android Gradle build reads `BACKEND_BASE_URL` from this file and exposes it to the app as `BuildConfig.BACKEND_BASE_URL`. The backend URL is configuration, **not authentication**; the app includes the configured URL in the built APK.
 
-### 3. Configure Firebase (`google-services.json`)
+> **Legacy template note:** `local.properties.example` currently contains a `MAPS_API_KEY` placeholder, but the current Gradle/app code does not read that property. Configure the Maps key in the XML resources in Step 4 instead. The unused property can be removed from the template in a follow-up cleanup.
 
-1. Go to [Firebase Console](https://console.firebase.google.com) and open (or create) your project.
-2. Add an Android app with package name `com.shubham.womensafety`.
-3. Register your debug SHA-1 fingerprint (get it by running `./gradlew signingReport` and copying the SHA-1 for the `debug` variant).
-4. Download `google-services.json` and place it at:
+### 3. Configure Firebase
+
+1. Open the [Firebase Console](https://console.firebase.google.com/) and select or create a project.
+2. Register an Android app with package name `com.shubham.womensafety`.
+3. Register the SHA-1 fingerprint for your debug signing certificate. From the project root, run:
+
+   **Windows PowerShell:**
+   ```powershell
+   .\gradlew.bat signingReport
    ```
+
+   **macOS/Linux:**
+   ```bash
+   ./gradlew signingReport
+   ```
+
+4. Download `google-services.json` for that Android app and place it at:
+
+   ```text
    app/google-services.json
    ```
+
 5. In Firebase Console → Authentication → Sign-in method, enable **Email/Password** and **Google**.
 
-> See `app/google-services.json.example` for the expected file structure.
+The repository includes `app/google-services.json.example` as a structural example only. It contains placeholders; it is not a working Firebase configuration. Do not put service-account credentials or other private server credentials in the Android app.
 
----
+### 4. Configure Google Maps
 
-### 4. Configure Google Maps API keys
+The current prototype reads the `google_maps_key` string resource from Android manifest metadata. Create the resource file for the build variant you intend to run.
 
-> **⚠️ Dual-use key warning:** The same key is used for both the Android Maps SDK (map tile rendering) and the Directions web-service API (HTTP call). If you restrict this key to *Android apps only* in Google Cloud Console, the Directions call will fail with `REQUEST_DENIED`.
->
-> **Option A (development):** Leave the key unrestricted.
-> **Option B (production):** Create two separate keys — one restricted to Android app (package + SHA-1) for the Maps SDK, and a second unrestricted/IP-restricted key for the Directions web service. Pass the second key separately via `BuildConfig` and update `MapsViewModel`.
+**Debug build — Windows PowerShell:**
 
-**Steps:**
-1. Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials.
-2. Create an API key (or reuse one). Enable **Maps SDK for Android** and **Directions API** on your project.
-3. Copy the key into **both** of the following files (copy from the `.example` templates):
+```powershell
+New-Item -ItemType Directory -Force .\app\src\debug\res\values | Out-Null
+Copy-Item .\google_maps_api.debug.xml.example .\app\src\debug\res\values\google_maps_api.xml
+```
 
-**Debug build:**
+**Debug build — macOS/Linux:**
+
 ```bash
+mkdir -p app/src/debug/res/values
 cp google_maps_api.debug.xml.example app/src/debug/res/values/google_maps_api.xml
-# Replace YOUR_DEBUG_GOOGLE_MAPS_API_KEY with your real key
 ```
 
-**Release build:**
-```bash
-cp google_maps_api.release.xml.example app/src/release/res/values/google_maps_api.xml
-# Replace YOUR_RELEASE_GOOGLE_MAPS_API_KEY with your real key
-# For release, get your keystore SHA-1 with:
-# keytool -list -v -keystore your-release-key.jks -alias your-alias
-```
+Open the copied file and replace `YOUR_DEBUG_GOOGLE_MAPS_API_KEY` with your own development key.
 
-> The same key value can be used for both debug and release during development.
+For a release build, create `app/src/release/res/values/` and copy `google_maps_api.release.xml.example` to `app/src/release/res/values/google_maps_api.xml`. Then replace `YOUR_RELEASE_GOOGLE_MAPS_API_KEY` with the value for that build. Apply the same directory-creation step for Windows or macOS/Linux as shown above, substituting `release` for `debug`.
 
----
+The actual `google_maps_api.xml` files are ignored by Git; only the `.example` templates belong in the public repository.
+
+#### Important API-key security limitation
+
+In the current code, **the same key is used for Android Maps SDK rendering and for a Directions web-service request made directly from the Android app**. A key packaged in an Android app can be extracted, so it must not be treated as a secret. Applying an Android-app application restriction to this shared key may cause the client-side Directions request to fail.
+
+For a local/demo build:
+
+- Use a dedicated development key, not a key with access to unrelated or production services.
+- Restrict the key to only the APIs this prototype needs where compatible with the current implementation.
+- Set sensible quotas and billing alerts in Google Cloud Console.
+- Never commit the real key or share it in screenshots, logs, or issue reports.
+
+**This is not a production-secure key architecture.** Before production use, refactor Directions requests to go through the backend using a server-side key, while using a separate Android Maps SDK key restricted to the package name and signing-certificate SHA-1. The current code has not implemented that separation yet. Also, the current Directions error logging can include the request URL (and therefore the key); redact the key from logs before wider deployment.
+
+Google Cloud Console: [APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
 
 ### 5. Run the Python backend
 
-The Android app fetches danger-zone data from a local FastAPI server exposed over ngrok.
+The backend generates synthetic Faridabad coordinate data, applies DBSCAN, and returns the resulting centroids.
 
-**Install dependencies:**
-```bash
+Create and activate a virtual environment from the project root.
+
+**Windows PowerShell:**
+
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install fastapi "uvicorn[standard]" scikit-learn numpy pydantic
 ```
 
-**Start the server:**
+**macOS/Linux:**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install fastapi "uvicorn[standard]" scikit-learn numpy pydantic
+```
+
+Start the backend:
+
 ```bash
 python main.py
 ```
-The server starts on `http://localhost:8000`. You can verify it at `http://localhost:8000/health`.
 
-**Expose it with ngrok:**
+The API runs on port `8000`. With the server running, verify locally at:
+
+- Health check: `http://127.0.0.1:8000/health`
+- API documentation: `http://127.0.0.1:8000/docs`
+- Danger-zone endpoint: `http://127.0.0.1:8000/api/v1/danger-zones`
+
+#### Expose the backend through ngrok (development only)
+
+Install ngrok separately and authenticate its CLI according to the [official ngrok setup guide](https://ngrok.com/docs/getting-started/).
+
+In a **separate terminal**, run:
+
 ```bash
-# Windows
-.\ngrok http 8000
-
-# macOS / Linux
 ngrok http 8000
 ```
 
-Copy the HTTPS forwarding URL from ngrok output (e.g. `https://xxxx-xx-xx-xxx-xx.ngrok-free.app`) and set it in `local.properties`:
+If `ngrok.exe` is in the current Windows directory rather than on your PATH, run `./ngrok.exe http 8000` in PowerShell instead.
+
+Copy the HTTPS forwarding URL displayed by ngrok and put it in `local.properties`, with a trailing slash. Example placeholder:
+
 ```properties
-BACKEND_BASE_URL=https://xxxx-xx-xx-xxx-xx.ngrok-free.app/
+BACKEND_BASE_URL=https://YOUR-NGROK-DOMAIN.ngrok-free.app/
 ```
 
-> Include the trailing `/`. The URL changes every time ngrok restarts unless you have a reserved domain on a paid plan. Rebuild the app after updating the URL.
+Keep the ngrok process running while testing the app. Temporary ngrok URLs may change when the tunnel restarts; if the URL changes, update `BACKEND_BASE_URL` and rebuild the app. The ngrok URL is not a security mechanism. The backend is exposed to the internet while the tunnel is active, so use this setup only for development and do not send sensitive data through it.
 
-**API endpoints:**
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/v1/danger-zones` | Returns DBSCAN-derived danger-zone centroids |
-| `GET` | `/health` | Health check |
-| — | `/docs` | Auto-generated Swagger UI |
+### 6. Build and run the Android app
+
+Open the cloned folder in Android Studio, allow Gradle sync to finish, complete Firebase and Maps configuration, and run the `app` configuration on a device or emulator (API 24+).
+
+From PowerShell on Windows:
+
+```powershell
+.\gradlew.bat assembleDebug
+.\gradlew.bat installDebug
+```
+
+From macOS/Linux:
+
+```bash
+./gradlew assembleDebug
+./gradlew installDebug
+```
+
+The app needs internet access, location permission, SMS permission, and call permission for the corresponding functions. SOS behaviour depends on permissions, device support, and the availability of a recent location.
 
 ---
 
-### 6. Build and run
+## API Endpoints
 
-Open the project in Android Studio and run the `app` configuration on a device or emulator (API 24+).
-
-Or build from the command line:
-```bash
-# Debug APK
-./gradlew assembleDebug
-
-# Install on connected device
-./gradlew installDebug
-```
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/danger-zones` | Returns DBSCAN-derived danger-zone centroids generated from synthetic coordinates |
+| `GET` | `/health` | Backend health check |
+| — | `/docs` | FastAPI's interactive API documentation |
 
 ---
 
 ## Project Structure
 
-```
+```text
+Disha-AI/
 ├── app/
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── java/com/shubham/womensafety/
-│   │   │   │   ├── database/          # Room — Guardian entity, DAO, Database
-│   │   │   │   ├── FirebaseAuth/      # FirebaseUserLiveData, LoginViewModel
-│   │   │   │   ├── network/           # Retrofit client, DangerZoneApi, response models
-│   │   │   │   ├── repository/        # SafetyRepository (fetches danger zones)
-│   │   │   │   ├── ui/
-│   │   │   │   │   ├── screens/       # DashboardScreen, MapsScreen, GuardianInfoScreen, AddGuardianScreen
-│   │   │   │   │   ├── components/    # Reusable Composables
-│   │   │   │   │   ├── navigation/    # AppNavGraph, Routes
-│   │   │   │   │   └── theme/         # Color, Theme
-│   │   │   │   └── MainActivity.kt
-│   │   ├── debug/res/values/          # google_maps_api.xml (gitignored — copy from .example)
-│   │   └── release/res/values/        # google_maps_api.xml (gitignored — copy from .example)
-│   ├── google-services.json           # gitignored — copy from google-services.json.example
-│   └── build.gradle
-├── main.py                            # FastAPI server entry point
+│   ├── build.gradle
+│   ├── google-services.json.example   # Firebase config template
+│   └── src/
+│       ├── main/
+│       │   ├── java/com/shubham/womensafety/
+│       │   │   ├── FirebaseAuth/      # Authentication state and login ViewModel
+│       │   │   ├── database/          # Room guardian entity, DAO and database
+│       │   │   ├── guardiandetail/    # Guardian management ViewModel
+│       │   │   ├── network/           # Retrofit client, API and response models
+│       │   │   ├── repository/        # Danger-zone data repository
+│       │   │   ├── ui/
+│       │   │   │   ├── components/    # Reusable Compose components
+│       │   │   │   ├── navigation/    # Navigation graph and routes
+│       │   │   │   └── screens/       # Dashboard, guardian and map screens
+│       │   │   ├── utils/             # Permission utilities
+│       │   │   └── MainActivity.kt
+│       │   └── test/ and androidTest/ # Unit and instrumentation tests
+│       ├── debug/res/values/          # Local Maps key resource (ignored)
+│       └── release/res/values/        # Local Maps key resource (ignored)
+├── gradle/wrapper/                    # Gradle wrapper
+├── main.py                            # FastAPI application
 ├── ml_clustering.py                   # DBSCAN danger-zone generation
-├── local.properties                   # gitignored — copy from local.properties.example
-├── local.properties.example           # template — commit this, not local.properties
-├── google-services.json.example       # Firebase config template
-├── google_maps_api.debug.xml.example  # Debug Maps key template
-└── google_maps_api.release.xml.example # Release Maps key template
+├── local.properties                   # Local SDK/backend config (ignored)
+├── local.properties.example           # Configuration template
+├── google_maps_api.debug.xml.example  # Debug Maps resource template
+└── google_maps_api.release.xml.example # Release Maps resource template
 ```
 
 ---
 
-## Permissions
+## Android Permissions
 
-| Permission | Used for |
+| Permission | Purpose |
 |---|---|
-| `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | GPS coordinates for SOS message and map display |
-| `SEND_SMS` | Sending emergency SMS to guardians |
-| `CALL_PHONE` | Auto-dialling the first guardian during SOS |
-| `INTERNET` | Maps, Directions API, Firebase, backend API |
+| `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | Location for the map and SOS message |
+| `SEND_SMS` | Sends an emergency SMS to saved guardians |
+| `CALL_PHONE` | Initiates a call to the first guardian when allowed |
+| `INTERNET` | Maps, Firebase, Directions requests and backend API communication |
+
+The app may open the device's email app with a prefilled message during the SOS flow; email delivery depends on the user and email application.
 
 ---
 
-## Security Notes
+## Security and Data Limitations
 
-- All API keys and secrets are stored in `local.properties` (gitignored) or gitignored resource files — they are never committed.
-- See the `.example` template files at the project root for the expected format of each secret file.
-- The Google Maps key is used for both the Android Maps SDK and Directions web-service calls. Applying an Android-app restriction silently breaks route calculation — see Step 4 for options.
+- Never commit `local.properties`, `google-services.json`, actual `google_maps_api.xml` files, service-account credentials, signing keys or other private configuration.
+- The `.example` files contain placeholders and document the expected structure; they are not working credentials.
+- Firebase client configuration is not equivalent to server credentials. Configure Firebase Authentication appropriately and apply suitable Firebase security controls for any Firebase services you use.
+- The Directions API is currently called from the Android client with a key that is also used for the Android Maps SDK. This key can be extracted from the app, and current error logs may include its request URL. This is a known limitation to address before production use.
+- The backend currently generates synthetic coordinates. Danger zones are demonstrations of DBSCAN clustering and must not be interpreted as verified crime hotspots or reliable safety advice.
+- The backend is exposed through a development ngrok tunnel rather than a permanent production deployment.
+
+---
+
+## Future Improvements
+
+- Replace synthetic coordinates with credible, appropriately sourced and maintained safety data.
+- Validate route scoring against defined criteria and realistic test cases.
+- Move Directions web-service requests to the backend and keep the server-side API key out of the Android app.
+- Redact API keys from logs and strengthen API-key restrictions, quotas and billing safeguards.
+- Deploy the backend securely and evaluate privacy, security, usability and reliability through a controlled pilot.
+
+---
+
+## Disclaimer
+
+Disha AI is an academic prototype. It has not been validated to identify actual dangerous areas or guarantee safer routes. Do not use it as a substitute for official emergency services or verified local safety information.
