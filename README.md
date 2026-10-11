@@ -283,31 +283,33 @@ The app needs internet access, location permission, SMS permission, and call per
 Disha-AI/
 ├── app/
 │   ├── build.gradle
-│   ├── google-services.json.example   # Firebase config template
+│   ├── google-services.json.example       # Firebase config template
 │   └── src/
 │       ├── main/
 │       │   ├── java/com/shubham/womensafety/
-│       │   │   ├── FirebaseAuth/      # Authentication state and login ViewModel
-│       │   │   ├── database/          # Room guardian entity, DAO and database
-│       │   │   ├── guardiandetail/    # Guardian management ViewModel
-│       │   │   ├── network/           # Retrofit client, API and response models
-│       │   │   ├── repository/        # Danger-zone data repository
+│       │   │   ├── FirebaseAuth/          # Authentication state and login ViewModel
+│       │   │   ├── database/              # Room guardian entity, DAO and database
+│       │   │   ├── guardiandetail/        # Guardian management ViewModel
+│       │   │   ├── network/               # Retrofit client, API and response models
+│       │   │   ├── repository/             # Danger-zone data repository
 │       │   │   ├── ui/
-│       │   │   │   ├── components/    # Reusable Compose components
-│       │   │   │   ├── navigation/    # Navigation graph and routes
-│       │   │   │   └── screens/       # Dashboard, guardian and map screens
-│       │   │   ├── utils/             # Permission utilities
+│       │   │   │   ├── components/         # Reusable Compose components
+│       │   │   │   ├── navigation/         # Navigation graph and routes
+│       │   │   │   └── screens/            # Dashboard, guardian and map screens
+│       │   │   ├── utils/                 # Permission utilities
 │       │   │   └── MainActivity.kt
-│       │   └── test/ and androidTest/ # Unit and instrumentation tests
-│       ├── debug/res/values/          # Local Maps key resource (ignored)
-│       └── release/res/values/        # Local Maps key resource (ignored)
-├── gradle/wrapper/                    # Gradle wrapper
-├── main.py                            # FastAPI application
-├── ml_clustering.py                   # DBSCAN danger-zone generation
-├── local.properties                   # Local SDK/backend config (ignored)
-├── local.properties.example           # Configuration template
-├── google_maps_api.debug.xml.example  # Debug Maps resource template
-└── google_maps_api.release.xml.example # Release Maps resource template
+│       │   └── test/ and androidTest/     # Unit and instrumentation tests
+│       ├── debug/res/values/              # Local Maps key resource (ignored)
+│       └── release/res/values/            # Local Maps key resource (ignored)
+├── gradle/wrapper/                        # Gradle wrapper
+├── .env.example                           # Backend environment variable template
+├── requirements.txt                       # Python backend dependencies
+├── main.py                                # FastAPI application
+├── ml_clustering.py                       # DBSCAN danger-zone generation
+├── local.properties                       # Local SDK/backend config (ignored)
+├── local.properties.example               # Configuration template
+├── google_maps_api.debug.xml.example      # Debug Maps resource template
+└── google_maps_api.release.xml.example    # Release Maps resource template
 ```
 
 ---
@@ -330,7 +332,7 @@ The app may open the device's email app with a prefilled message during the SOS 
 - Never commit `local.properties`, `google-services.json`, actual `google_maps_api.xml` files, service-account credentials, signing keys or other private configuration.
 - The `.example` files contain placeholders and document the expected structure; they are not working credentials.
 - Firebase client configuration is not equivalent to server credentials. Configure Firebase Authentication appropriately and apply suitable Firebase security controls for any Firebase services you use.
-- The Maps SDK key in the Android app is used only for tile rendering. Directions API requests are proxied through the backend; the Directions API key is stored only in the `DIRECTIONS_API_KEY` server environment variable and never sent to the app.
+- The Maps SDK key in the Android app is used only by the Android Maps SDK. Directions API requests are proxied through the FastAPI backend. For local development, the Directions API key is stored in the Git-ignored .env file and loaded into the backend's environment. In deployment, configure DIRECTIONS_API_KEY as a server-side environment variable. The Directions API key is never included in the Android app or sent to it.
 - The Android Maps SDK key can be safely restricted to the Android app (package name + SHA-1). See Step 4.
 - The backend currently generates synthetic coordinates. Danger zones are demonstrations of DBSCAN clustering and must not be interpreted as verified crime hotspots or reliable safety advice.
 - The backend is exposed through a development ngrok tunnel rather than a permanent production deployment.
