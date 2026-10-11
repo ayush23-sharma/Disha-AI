@@ -27,7 +27,7 @@ The current route-scoring rules apply a penalty when a route passes within appro
 - Kotlin, Jetpack Compose, Navigation Compose
 - Firebase Authentication and FirebaseUI Auth
 - Google Maps SDK for Android
-- Google Directions API (currently called directly by the Android app)
+- Google Directions API (proxied through the FastAPI backend — key never in the app)
 - Fused Location Provider
 - Room for local guardian storage
 - Retrofit 2 and OkHttp for backend communication
@@ -37,6 +37,7 @@ The current route-scoring rules apply a penalty when a route passes within appro
 
 - Python 3.10+
 - FastAPI and Uvicorn
+- httpx (async Directions API proxy)
 - scikit-learn (DBSCAN) and NumPy
 - ngrok for temporary development access from the Android device
 
@@ -121,7 +122,9 @@ The repository includes `app/google-services.json.example` as a structural examp
 
 ### 4. Configure Google Maps
 
-The current prototype reads the `google_maps_key` string resource from Android manifest metadata. Create the resource file for the build variant you intend to run.
+The Maps key is used **only** for the Android Maps SDK (map tile rendering). Directions API calls are proxied through the FastAPI backend, so this key is never used for web-service requests and can be safely restricted to your Android app.
+
+Create the resource file for the build variant you intend to run.
 
 **Debug build — Windows PowerShell:**
 
@@ -143,20 +146,15 @@ For a release build, create `app/src/release/res/values/` and copy `google_maps_
 
 The actual `google_maps_api.xml` files are ignored by Git; only the `.example` templates belong in the public repository.
 
-#### Important API-key security limitation
+#### Recommended key restriction
 
-In the current code, **the same key is used for Android Maps SDK rendering and for a Directions web-service request made directly from the Android app**. A key packaged in an Android app can be extracted, so it must not be treated as a secret. Applying an Android-app application restriction to this shared key may cause the client-side Directions request to fail.
+Because this key is only used for the Android Maps SDK, you can safely apply an **Android apps** restriction in [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials):
 
-For a local/demo build:
+- Application restriction: **Android apps**
+- Package name: `com.shubham.womensafety`
+- SHA-1 fingerprint: from `./gradlew signingReport` (debug) or your release keystore
 
-- Use a dedicated development key, not a key with access to unrelated or production services.
-- Restrict the key to only the APIs this prototype needs where compatible with the current implementation.
-- Set sensible quotas and billing alerts in Google Cloud Console.
-- Never commit the real key or share it in screenshots, logs, or issue reports.
-
-**This is not a production-secure key architecture.** Before production use, refactor Directions requests to go through the backend using a server-side key, while using a separate Android Maps SDK key restricted to the package name and signing-certificate SHA-1. The current code has not implemented that separation yet. Also, the current Directions error logging can include the request URL (and therefore the key); redact the key from logs before wider deployment.
-
-Google Cloud Console: [APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials).
+Enable only **Maps SDK for Android** as the API restriction.
 
 ### 5. Run the Python backend
 
@@ -170,7 +168,7 @@ Create and activate a virtual environment from the project root.
 py -3.10 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install fastapi "uvicorn[standard]" scikit-learn numpy pydantic
+python -m pip install -r requirements.txt
 ```
 
 **macOS/Linux:**
@@ -179,8 +177,40 @@ pip install fastapi "uvicorn[standard]" scikit-learn numpy pydantic
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install fastapi "uvicorn[standard]" scikit-learn numpy pydantic
+pip install -r requirements.txt
 ```
+
+#### Configure the Directions API key
+
+The backend proxies the Google Directions API using a server-side key that is never sent to the Android app. Store the key in a local `.env` file.
+
+**1.** Copy the template (only if `.env` does not already exist):
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env
+```
+
+```bash
+# macOS/Linux
+cp .env.example .env
+```
+
+> Do not run this command if `.env` already exists — it would overwrite your key.
+
+**2.** Open `.env` and replace the placeholder with your real Directions API key:
+
+```dotenv
+DIRECTIONS_API_KEY=AIza...your_actual_key_here...
+```
+
+Get a Directions API key at [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials). Enable only **Directions API** on that key; keep it separate from the Maps SDK key used by the Android app.
+
+**3.** The application loads `.env` automatically at startup — no PowerShell `$env:` command is needed for normal local development.
+
+> **Deployment note:** On a hosting platform, set `DIRECTIONS_API_KEY` as a real environment variable instead of using a `.env` file. A variable already present in the OS environment takes precedence over `.env`.
+
+> **Security:** `.env` is listed in `.gitignore` and must never be committed, shared in screenshots, or included in logs.
 
 Start the backend:
 
@@ -241,6 +271,7 @@ The app needs internet access, location permission, SMS permission, and call per
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/v1/danger-zones` | Returns DBSCAN-derived danger-zone centroids generated from synthetic coordinates |
+| `GET` | `/api/v1/directions` | Proxies Google Directions API server-side; returns encoded route polylines. Requires `DIRECTIONS_API_KEY` env var. Query params: `origin_lat`, `origin_lng`, `dest_lat`, `dest_lng` |
 | `GET` | `/health` | Backend health check |
 | — | `/docs` | FastAPI's interactive API documentation |
 
@@ -299,7 +330,8 @@ The app may open the device's email app with a prefilled message during the SOS 
 - Never commit `local.properties`, `google-services.json`, actual `google_maps_api.xml` files, service-account credentials, signing keys or other private configuration.
 - The `.example` files contain placeholders and document the expected structure; they are not working credentials.
 - Firebase client configuration is not equivalent to server credentials. Configure Firebase Authentication appropriately and apply suitable Firebase security controls for any Firebase services you use.
-- The Directions API is currently called from the Android client with a key that is also used for the Android Maps SDK. This key can be extracted from the app, and current error logs may include its request URL. This is a known limitation to address before production use.
+- The Maps SDK key in the Android app is used only for tile rendering. Directions API requests are proxied through the backend; the Directions API key is stored only in the `DIRECTIONS_API_KEY` server environment variable and never sent to the app.
+- The Android Maps SDK key can be safely restricted to the Android app (package name + SHA-1). See Step 4.
 - The backend currently generates synthetic coordinates. Danger zones are demonstrations of DBSCAN clustering and must not be interpreted as verified crime hotspots or reliable safety advice.
 - The backend is exposed through a development ngrok tunnel rather than a permanent production deployment.
 
@@ -309,8 +341,7 @@ The app may open the device's email app with a prefilled message during the SOS 
 
 - Replace synthetic coordinates with credible, appropriately sourced and maintained safety data.
 - Validate route scoring against defined criteria and realistic test cases.
-- Move Directions web-service requests to the backend and keep the server-side API key out of the Android app.
-- Redact API keys from logs and strengthen API-key restrictions, quotas and billing safeguards.
+- Strengthen API-key restrictions, quotas and billing safeguards in Google Cloud Console.
 - Deploy the backend securely and evaluate privacy, security, usability and reliability through a controlled pilot.
 
 ---

@@ -6,27 +6,23 @@
         app/src/debug/res/values/google_maps_api.xml
     and replace the placeholder with your real key.
 
-    ⚠️  DUAL-USE KEY WARNING
-    This key is used for TWO different purposes in this app:
-      1. Android Maps SDK  — map tile rendering (AndroidManifest meta-data)
-      2. Directions web API — HTTP call to maps.googleapis.com/maps/api/directions/json
+    This key is used ONLY for the Android Maps SDK (map tile rendering).
+    Directions API requests are now proxied through the FastAPI backend,
+    so this key never makes web-service calls and can be safely restricted.
 
-    If you restrict this key to "Android apps" only in Google Cloud Console, the
-    Directions web-service call will fail with REQUEST_DENIED. You have two options:
-
-    Option A (recommended for development): Leave the key unrestricted.
-    Option B (recommended for production): Create two separate keys —
-      • Key 1: restricted to Android app (package + SHA-1) for Maps SDK display
-      • Key 2: unrestricted or IP-restricted for the Directions web-service call
-      Then pass Key 2 separately (e.g. via BuildConfig) and update MapsViewModel.
+    RECOMMENDED RESTRICTION (Google Cloud Console)
+    -----------------------------------------------
+    Restrict this key to "Android apps" and add:
+      • Package name:  com.shubham.womensafety
+      • SHA-1 fingerprint: run  ./gradlew signingReport  and copy the
+        SHA-1 for the debug variant
 
     HOW TO GET A KEY
     ----------------
     1. Go to https://console.cloud.google.com → APIs & Services → Credentials
     2. Create an API key (or reuse an existing one)
-    3. Enable "Maps SDK for Android" and "Directions API" on your project
-    4. For your debug key, run:  ./gradlew signingReport
-       and copy the SHA-1 fingerprint for the "debug" variant
+    3. Enable "Maps SDK for Android" on your project
+    4. Apply the Android-app restriction described above
     5. Replace the placeholder below with your key (it starts with "AIza")
     -->
     <string name="google_maps_key" templateMergeStrategy="preserve" translatable="false">YOUR_DEBUG_GOOGLE_MAPS_API_KEY</string>

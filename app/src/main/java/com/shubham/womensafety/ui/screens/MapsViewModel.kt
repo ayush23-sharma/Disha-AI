@@ -1,8 +1,6 @@
 package com.shubham.womensafety.ui.screens
 
 import android.app.Application
-import android.content.pm.PackageManager
-import android.graphics.Color
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,13 +9,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.PolyUtil
+import com.shubham.womensafety.network.RetrofitClient
 import com.shubham.womensafety.repository.SafetyRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
 
 data class RoutePolylineUi(
     val path: List<LatLng>,
@@ -35,11 +31,9 @@ class MapsViewModel(application: Application) : AndroidViewModel(application) {
             LatLng(28.4366, 77.3090),
             LatLng(28.4629, 77.3024)
         )
-        private const val MAPS_API_KEY_META_DATA = "com.google.android.geo.API_KEY"
     }
 
     private val safetyRepository = SafetyRepository()
-    private val directionsHttpClient = OkHttpClient()
 
     var dynamicDangerZones by mutableStateOf<List<LatLng>>(emptyList())
         private set
@@ -85,53 +79,30 @@ class MapsViewModel(application: Application) : AndroidViewModel(application) {
     fun fetchRoutes(origin: LatLng, dest: LatLng) {
         viewModelScope.launch {
             try {
-                val apiKey = getGoogleMapsApiKey()
-                if (apiKey.isBlank()) {
-                    routeToastMessage = "Google Maps API key missing"
+                val routeResponse = withContext(Dispatchers.IO) {
+                    RetrofitClient.dangerZoneApi.getDirections(
+                        originLat = origin.latitude,
+                        originLng = origin.longitude,
+                        destLat = dest.latitude,
+                        destLng = dest.longitude,
+                    )
+                }
+
+                if (!routeResponse.isSuccessful) {
+                    Log.e("RouteError", "Directions backend error: HTTP ${routeResponse.code()}")
+                    routeToastMessage = "Route service unavailable (${routeResponse.code()})"
                     return@launch
                 }
 
-                val requestUrl = buildString {
-                    append("https://maps.googleapis.com/maps/api/directions/json?")
-                    append("origin=${origin.latitude},${origin.longitude}")
-                    append("&destination=${dest.latitude},${dest.longitude}")
-                    append("&mode=driving")
-                    append("&alternatives=true")
-                    append("&key=$apiKey")
-                }
-
-                val response = withContext(Dispatchers.IO) {
-                    directionsHttpClient.newCall(
-                        Request.Builder().url(requestUrl).build()
-                    ).execute().use { httpResponse ->
-                        if (!httpResponse.isSuccessful) {
-                            val errorBody = httpResponse.body?.string().orEmpty()
-                            Log.e("RouteError", "Directions HTTP failure code=${httpResponse.code}, url=$requestUrl, body=$errorBody")
-                            throw IllegalStateException("Directions API HTTP ${httpResponse.code}. Body: $errorBody")
-                        }
-                        httpResponse.body?.string().orEmpty()
-                    }
-                }
-
-                val directionsJson = JSONObject(response)
-                val directionsStatus = directionsJson.optString("status")
-                if (directionsStatus != "OK") {
-                    val directionsError = directionsJson.optString("error_message")
-                    Log.e("RouteError", "Directions status=$directionsStatus, error=$directionsError, url=$requestUrl, raw=$response")
-                    routeToastMessage = "Route service status: $directionsStatus"
-                    return@launch
-                }
-
-                val routesArray = directionsJson.optJSONArray("routes") ?: run {
-                    Log.e("RouteError", "Directions response missing routes array. raw=$response")
+                val routes = routeResponse.body().orEmpty()
+                if (routes.isEmpty()) {
+                    routeToastMessage = "No routes returned by service"
                     return@launch
                 }
 
                 val scoredRoutes = mutableListOf<ScoredRoute>()
-                for (index in 0 until routesArray.length()) {
-                    val route = routesArray.getJSONObject(index)
-                    val encodedPolyline = route.getJSONObject("overview_polyline").getString("points")
-                    val decodedPath = PolyUtil.decode(encodedPolyline)
+                for (route in routes) {
+                    val decodedPath = PolyUtil.decode(route.overviewPolyline)
                     var score = 0
 
                     dynamicDangerZones.forEach { dangerPoint ->
@@ -185,23 +156,4 @@ class MapsViewModel(application: Application) : AndroidViewModel(application) {
         val path: List<LatLng>,
         val score: Int
     )
-
-    private fun getGoogleMapsApiKey(): String {
-        val context = getApplication<Application>()
-        val appInfo = context.packageManager.getApplicationInfo(context.packageName, PackageManager.GET_META_DATA)
-        val metadata = appInfo.metaData ?: return ""
-        val directValue = metadata.getString(MAPS_API_KEY_META_DATA).orEmpty()
-        if (directValue.isNotBlank() && !directValue.startsWith("@")) return directValue
-
-        val resourceId = metadata.getInt(MAPS_API_KEY_META_DATA)
-        if (resourceId != 0) return context.getString(resourceId)
-
-        if (directValue.startsWith("@")) {
-            val resourceName = directValue.removePrefix("@string/")
-            val resolvedId = context.resources.getIdentifier(resourceName, "string", context.packageName)
-            if (resolvedId != 0) return context.getString(resolvedId)
-        }
-
-        return ""
-    }
 }

@@ -1,0 +1,10 @@
+# Backend dependencies for Disha AI FastAPI server
+# Install with:  python -m pip install -r requirements.txt
+
+fastapi
+uvicorn[standard]
+pydantic
+httpx
+scikit-learn
+numpy
+python-dotenv
